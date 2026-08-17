@@ -42,6 +42,19 @@
     .dropzone .dz-hint { font-size: 12px; color: var(--text-muted); margin: 0; }
     .dropzone input[type="file"] { display: none; }
     .file-chosen { margin-top: 12px; font-size: 13px; color: var(--text-primary); font-weight: 500; }
+    .file-error {
+        margin-top: 12px;
+        padding: 10px 14px;
+        background: var(--red-light);
+        color: var(--red);
+        border: 1px solid #FECACA;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        display: none;
+    }
+    .file-error.show { display: block; }
+    .dropzone.invalid { border-color: var(--red); background: var(--red-light); }
 
     .howto-panel {
         width: 420px;
@@ -96,10 +109,11 @@
                 <p class="dz-sub">atau klik untuk memilih file dari komputer</p>
                 <p class="dz-hint">Maksimal 16 MB &middot; Hanya PDF dengan lapisan teks</p>
                 <div class="file-chosen" id="fileChosen"></div>
-                <input type="file" name="file" id="file" accept=".pdf" required>
+                <div class="file-error" id="fileError"></div>
+                <input type="file" name="file" id="file" accept=".pdf,application/pdf" required>
             </label>
 
-            <button type="submit" class="btn btn-accent">Upload &amp; Klasifikasikan</button>
+            <button type="submit" class="btn btn-accent" id="submitBtn">Upload &amp; Klasifikasikan</button>
         </form>
     </div>
 
@@ -140,13 +154,53 @@
     const fileInput = document.getElementById('file');
     const dropzone = document.getElementById('dropzone');
     const fileChosen = document.getElementById('fileChosen');
+    const fileError = document.getElementById('fileError');
+    const submitBtn = document.getElementById('submitBtn');
+
+    function showError(message) {
+        fileError.textContent = message;
+        fileError.classList.add('show');
+        fileChosen.textContent = "";
+        dropzone.classList.add('invalid');
+        submitBtn.disabled = true;
+    }
+
+    function clearError() {
+        fileError.textContent = "";
+        fileError.classList.remove('show');
+        dropzone.classList.remove('invalid');
+        submitBtn.disabled = false;
+    }
+
+    function isPdfFile(file) {
+        // Cek dua-duanya: ekstensi nama file DAN MIME type, supaya lebih ketat
+        // (nama file bisa dipalsukan gampang, MIME type sedikit lebih sulit).
+        const nameIsPdf = file.name.toLowerCase().endsWith('.pdf');
+        const typeIsPdf = file.type === 'application/pdf' || file.type === '';
+        return nameIsPdf && typeIsPdf;
+    }
+
+    function handleFileSelected(file) {
+        if (!file) {
+            clearError();
+            fileChosen.textContent = "";
+            return;
+        }
+        if (!isPdfFile(file)) {
+            const ext = file.name.includes('.') ? file.name.split('.').pop().toUpperCase() : 'tidak dikenali';
+            showError(
+                `File "${file.name}" ditolak — formatnya .${ext.toLowerCase()}, bukan PDF. ` +
+                `Silakan pilih file dengan format .pdf saja.`
+            );
+            fileInput.value = ""; // reset input supaya file invalid tidak "nyangkut"
+            return;
+        }
+        clearError();
+        fileChosen.textContent = "File dipilih: " + file.name;
+    }
 
     fileInput.addEventListener('change', () => {
-        if (fileInput.files.length > 0) {
-            fileChosen.textContent = "File dipilih: " + fileInput.files[0].name;
-        } else {
-            fileChosen.textContent = "";
-        }
+        handleFileSelected(fileInput.files[0] || null);
     });
 
     ['dragover', 'dragenter'].forEach(evt => {
@@ -163,8 +217,27 @@
     });
     dropzone.addEventListener('drop', (e) => {
         if (e.dataTransfer.files.length > 0) {
+            const droppedFile = e.dataTransfer.files[0];
+            if (!isPdfFile(droppedFile)) {
+                handleFileSelected(droppedFile); // langsung tampilkan error, jangan diisi ke input
+                return;
+            }
             fileInput.files = e.dataTransfer.files;
-            fileChosen.textContent = "File dipilih: " + e.dataTransfer.files[0].name;
+            handleFileSelected(droppedFile);
+        }
+    });
+
+    // Jaring pengaman terakhir: cegah submit kalau somehow file tetap tidak valid.
+    document.querySelector('form').addEventListener('submit', (e) => {
+        const file = fileInput.files[0];
+        if (!file) {
+            e.preventDefault();
+            showError("Pilih file PDF terlebih dahulu sebelum upload.");
+            return;
+        }
+        if (!isPdfFile(file)) {
+            e.preventDefault();
+            showError("File yang dipilih bukan PDF. Silakan pilih file .pdf.");
         }
     });
 </script>

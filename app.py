@@ -338,7 +338,12 @@ def upload_submit():
         return redirect(url_for("upload_page"))
 
     if not allowed_file(uploaded_file.filename):
-        flash("Format file tidak didukung. Hanya file .pdf yang diterima.", "error")
+        ext = uploaded_file.filename.rsplit(".", 1)[-1].lower() if "." in uploaded_file.filename else "tidak diketahui"
+        flash(
+            f"File \"{uploaded_file.filename}\" ditolak — formatnya .{ext}, bukan PDF. "
+            f"Sistem ini hanya menerima file dengan format .pdf.",
+            "error",
+        )
         return redirect(url_for("upload_page"))
 
     original_filename = secure_filename(uploaded_file.filename)
