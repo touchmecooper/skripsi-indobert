@@ -1,0 +1,22 @@
+# Data yang dibuat runtime (JANGAN di-commit, ini bersifat lokal/ephemeral)
+articles.db
+uploaded_pdfs/*.pdf
+!uploaded_pdfs/.gitkeep
+
+# Model TIDAK disimpan di git sama sekali -- di-download dari Hugging Face
+# Hub saat runtime (lihat HF_MODEL_REPO di app.py). Folder ini cuma dipakai
+# untuk development lokal opsional.
+model_output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editor / OS
+.vscode/
+.DS_Store
+
+# Environment variables lokal (JANGAN commit token HF kamu!)
+.env

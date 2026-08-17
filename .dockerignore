@@ -1,0 +1,9 @@
+model_output/
+articles.db
+uploaded_pdfs/*.pdf
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.vscode/
+*.md

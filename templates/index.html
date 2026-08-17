@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Test Model - Klasifikasi Artikel{% endblock %}
+{% block content %}
+<style>
+    .result-box {
+        margin-top: 24px;
+        padding: 20px 24px;
+        background: var(--accent-light);
+        border-left: 4px solid var(--accent);
+        border-radius: 8px;
+    }
+    .predicted { font-weight: 700; font-size: 18px; color: var(--text-primary); margin: 4px 0; }
+    form textarea { margin-top: 12px; }
+</style>
+
+<div class="page-header">
+    <h1>Test Model IndoBERT</h1>
+    <p>Sistem Klasifikasi Artikel Berbahasa Indonesia (Teknologi / Medis / Edukasi)</p>
+</div>
+
+<div class="card">
+    <form method="POST" action="{{ url_for('index_predict') }}">
+        <label class="field-label" for="text">Masukkan teks artikel</label>
+        <textarea name="text" id="text" rows="8" placeholder="Tempel teks artikel di sini...">{{ input_text }}</textarea>
+        <button type="submit" class="btn btn-accent" style="margin-top: 16px;">Klasifikasikan</button>
+    </form>
+
+    {% if error %}
+    <div class="flash error" style="margin-top:16px;"><strong>Error:</strong> {{ error }}</div>
+    {% endif %}
+
+    {% if result %}
+    <div class="result-box">
+        <div style="font-size:13px; color: var(--text-secondary);">Kategori Prediksi:</div>
+        <div class="predicted">{{ result.predicted_label }}</div>
+        <div style="font-size:13px; color: var(--text-secondary); margin-bottom: 12px;">Confidence: {{ (result.confidence * 100) | round(2) }}%</div>
+
+        <table>
+            <thead><tr><th>Kategori</th><th>Probabilitas</th></tr></thead>
+            <tbody>
+                {% for label, prob in result.probabilities.items() %}
+                <tr><td>{{ label }}</td><td>{{ (prob * 100) | round(2) }}%</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p style="margin-top:16px; font-size:13px; color: var(--text-secondary);">
+            Untuk menyimpan artikel secara permanen, gunakan
+            <a href="{{ url_for('upload_page') }}" style="color: var(--accent); font-weight: 600;">Upload Jurnal (PDF)</a>.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

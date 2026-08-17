@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Daftar Artikel{% endblock %}
+{% block content %}
+<style>
+    .search-box {
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        height: 44px;
+        width: 340px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+    }
+    .search-box input {
+        border: none;
+        background: transparent;
+        padding: 0;
+        width: 100%;
+        font-size: 13px;
+    }
+    .search-box button {
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    .articles-layout {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+    }
+
+    .sidebar-filter {
+        width: 240px;
+        flex-shrink: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px 20px;
+    }
+    .sidebar-filter .sidebar-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        letter-spacing: 0.03em;
+        margin-bottom: 12px;
+    }
+    .sidebar-filter a.filter-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 12px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-primary);
+        margin-bottom: 2px;
+    }
+    .sidebar-filter a.filter-item.active {
+        background: var(--accent-light);
+        color: var(--accent-text);
+        font-weight: 600;
+    }
+    .sidebar-filter a.filter-item .filter-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .sidebar-filter a.filter-item .filter-count {
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .article-list { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+    .article-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px 24px;
+        text-decoration: none;
+        color: inherit;
+        display: block;
+    }
+    .article-card:hover { border-color: var(--accent); }
+    .article-card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+    }
+    .article-card-top h3 { font-size: 16px; font-weight: 600; margin: 0; }
+    .article-meta { font-size: 12px; color: var(--text-muted); margin: 8px 0 6px; }
+    .article-snippet { font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+
+    .empty-state { color: var(--text-muted); font-size: 14px; }
+</style>
+
+<div class="page-header-row">
+    <div>
+        <h1 style="font-size:26px; font-weight:700; margin:0 0 4px;">Daftar Artikel Tersimpan</h1>
+        <p style="font-size:13px; color: var(--text-secondary); margin:0;">Total {{ total_count }} artikel tersimpan</p>
+    </div>
+    <form method="GET" action="{{ url_for('article_list') }}" class="search-box">
+        {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+        <input type="text" name="q" placeholder="Cari judul atau isi artikel..." value="{{ search_query }}">
+        <button type="submit">Cari</button>
+    </form>
+</div>
+
+<div class="articles-layout">
+    <div class="sidebar-filter">
+        <div class="sidebar-title">FILTER KATEGORI</div>
+        <a href="{{ url_for('article_list', q=search_query) }}" class="filter-item {{ 'active' if not active_category else '' }}">
+            <span class="filter-label">Semua Artikel</span>
+            <span class="filter-count">{{ total_count }}</span>
+        </a>
+        {% for label, count in category_counts.items() %}
+        <a href="{{ url_for('article_list', category=label, q=search_query) }}" class="filter-item {{ 'active' if active_category == label else '' }}">
+            <span class="filter-label"><span class="dot {{ label }}"></span>{{ label }}</span>
+            <span class="filter-count">{{ count }}</span>
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="article-list">
+        {% if articles %}
+            {% for article in articles %}
+            <a href="{{ url_for('article_detail', article_id=article.id) }}" class="article-card">
+                <div class="article-card-top">
+                    <h3>{{ article.title }}</h3>
+                    <span class="badge {{ article.category }}">{{ article.category }}</span>
+                </div>
+                <div class="article-meta">
+                    Confidence: {{ (article.confidence * 100) | round(1) }}% &middot;
+                    {{ article.page_count }} halaman &middot;
+                    Diupload: {{ article.uploaded_at.strftime('%Y-%m-%d %H:%M') }}
+                </div>
+                <p class="article-snippet">{{ article.content[:180] }}{% if article.content|length > 180 %}...{% endif %}</p>
+            </a>
+            {% endfor %}
+        {% else %}
+            <p class="empty-state">Belum ada artikel yang cocok. <a href="{{ url_for('upload_page') }}" style="color: var(--accent); font-weight: 600;">Upload artikel pertama kamu.</a></p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

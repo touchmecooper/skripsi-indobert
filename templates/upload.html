@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Upload Jurnal (PDF){% endblock %}
+{% block content %}
+<style>
+    .upload-layout {
+        display: flex;
+        gap: 40px;
+        align-items: flex-start;
+    }
+    .upload-card { flex: 1; min-width: 0; }
+    .dropzone {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 20px;
+        border: 1.5px dashed var(--accent);
+        background: var(--accent-light);
+        border-radius: 12px;
+        padding: 48px 24px;
+        text-align: center;
+        cursor: pointer;
+        transition: background 0.15s ease;
+        width: 100%;
+    }
+    .dropzone:hover { background: #FDECD1; }
+    .dropzone.dragover { background: #FDECD1; }
+    .dropzone .doc-icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 12px;
+        border-radius: 10px;
+        background: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--accent);
+    }
+    .dropzone .dz-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+    .dropzone .dz-sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 6px; }
+    .dropzone .dz-hint { font-size: 12px; color: var(--text-muted); margin: 0; }
+    .dropzone input[type="file"] { display: none; }
+    .file-chosen { margin-top: 12px; font-size: 13px; color: var(--text-primary); font-weight: 500; }
+
+    .howto-panel {
+        width: 420px;
+        flex-shrink: 0;
+        background: var(--navy);
+        border-radius: 16px;
+        padding: 40px;
+        color: #fff;
+    }
+    .howto-panel h2 { font-size: 18px; font-weight: 700; margin: 0 0 28px; }
+    .howto-step {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        margin-bottom: 28px;
+    }
+    .howto-step:last-child { margin-bottom: 0; }
+    .howto-badge {
+        width: 32px;
+        height: 32px;
+        border-radius: 16px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .howto-step h3 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+    .howto-step p { font-size: 13px; color: #B8C1D9; margin: 0; line-height: 1.5; }
+
+    form .btn-accent { margin-top: 20px; width: 100%; }
+</style>
+
+<div class="page-header">
+    <h1>Upload Jurnal / Artikel (PDF)</h1>
+    <p>Teks diekstrak otomatis dari PDF, diklasifikasikan oleh model IndoBERT, lalu disimpan secara lokal.</p>
+</div>
+
+<div class="upload-layout">
+    <div class="card upload-card">
+        <form method="POST" action="{{ url_for('upload_submit') }}" enctype="multipart/form-data">
+            <label class="field-label" for="title">Judul (opsional)</label>
+            <input type="text" name="title" id="title" placeholder="Kosongkan untuk diambil otomatis dari nama file">
+
+            <label class="field-label" style="margin-top: 24px;">File PDF</label>
+            <label for="file" class="dropzone" id="dropzone">
+                <div class="doc-icon">PDF</div>
+                <p class="dz-title">Drag &amp; drop file PDF di sini</p>
+                <p class="dz-sub">atau klik untuk memilih file dari komputer</p>
+                <p class="dz-hint">Maksimal 16 MB &middot; Hanya PDF dengan lapisan teks</p>
+                <div class="file-chosen" id="fileChosen"></div>
+                <input type="file" name="file" id="file" accept=".pdf" required>
+            </label>
+
+            <button type="submit" class="btn btn-accent">Upload &amp; Klasifikasikan</button>
+        </form>
+    </div>
+
+    <div class="howto-panel">
+        <h2>Bagaimana Cara Kerjanya</h2>
+        <div class="howto-step">
+            <div class="howto-badge">1</div>
+            <div>
+                <h3>Upload File PDF</h3>
+                <p>Pilih atau seret file jurnal berformat PDF ke area upload.</p>
+            </div>
+        </div>
+        <div class="howto-step">
+            <div class="howto-badge">2</div>
+            <div>
+                <h3>Ekstraksi Teks Otomatis</h3>
+                <p>Sistem membaca dan mengekstrak seluruh teks dari PDF menggunakan pypdf.</p>
+            </div>
+        </div>
+        <div class="howto-step">
+            <div class="howto-badge">3</div>
+            <div>
+                <h3>Klasifikasi oleh IndoBERT</h3>
+                <p>Teks diproses model fine-tuned untuk diklasifikasikan ke 3 kategori beserta confidence score.</p>
+            </div>
+        </div>
+        <div class="howto-step">
+            <div class="howto-badge">4</div>
+            <div>
+                <h3>Tersimpan Secara Lokal</h3>
+                <p>File PDF asli dan hasil klasifikasi disimpan di database &amp; folder lokal untuk diakses kembali.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('file');
+    const dropzone = document.getElementById('dropzone');
+    const fileChosen = document.getElementById('fileChosen');
+
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+            fileChosen.textContent = "File dipilih: " + fileInput.files[0].name;
+        } else {
+            fileChosen.textContent = "";
+        }
+    });
+
+    ['dragover', 'dragenter'].forEach(evt => {
+        dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach(evt => {
+        dropzone.addEventListener(evt, (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+        });
+    });
+    dropzone.addEventListener('drop', (e) => {
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            fileChosen.textContent = "File dipilih: " + e.dataTransfer.files[0].name;
+        }
+    });
+</script>
+{% endblock %}

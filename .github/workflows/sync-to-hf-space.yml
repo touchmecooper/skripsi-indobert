@@ -1,0 +1,32 @@
+name: Sync to Hugging Face Space
+
+# Workflow ini otomatis push kode ke Hugging Face Space setiap kali ada
+# push ke branch main di GitHub. Jadi alurnya:
+#   1. Kamu develop & commit di GitHub (seperti biasa)
+#   2. Push ke GitHub -> workflow ini otomatis jalan
+#   3. Kode ter-mirror ke HF Space -> Space otomatis rebuild & redeploy
+#
+# SETUP YANG DIPERLUKAN (lihat DEPLOY.md untuk detail):
+#   1. Buat access token di huggingface.co/settings/tokens (scope: write)
+#   2. Tambahkan sebagai GitHub Secret bernama HF_TOKEN
+#      (Settings repo GitHub > Secrets and variables > Actions > New repository secret)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # supaya bisa di-trigger manual juga dari tab Actions
+
+jobs:
+  sync-to-space:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push ke Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push -f https://cooperss:$HF_TOKEN@huggingface.co/spaces/cooperss/skripsi-klasifikasi-jurnal main

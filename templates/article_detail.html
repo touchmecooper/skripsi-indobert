@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }}{% endblock %}
+{% block content %}
+<style>
+    .back-link {
+        display: inline-block;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-secondary);
+        text-decoration: none;
+        margin-bottom: 24px;
+    }
+    .back-link:hover { color: var(--text-primary); }
+
+    .detail-header h1 {
+        font-size: 26px;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.3;
+    }
+
+    /* ===== EDIT JUDUL ===== */
+    .edit-title-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        margin-bottom: 16px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--accent);
+        text-decoration: underline;
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    #titleEditForm { display: none; margin-bottom: 16px; }
+    #titleEditForm label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+    #titleEditForm input[type="text"] {
+        width: 100%;
+        max-width: 560px;
+        padding: 14px 16px;
+        font-size: 15px;
+        font-weight: 600;
+        border: 2px solid var(--accent);
+        border-radius: 8px;
+        font-family: inherit;
+        color: var(--text-primary);
+    }
+    #titleEditForm .edit-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin: 8px 0 12px;
+    }
+    #titleEditForm .edit-actions { display: flex; gap: 10px; }
+    #titleEditForm .btn-cancel {
+        background: #fff;
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+    }
+
+    .detail-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
+    .detail-meta-row .meta-text { font-size: 13px; color: var(--text-secondary); }
+
+    .prob-card { margin-bottom: 24px; }
+    .prob-card h2 { font-size: 16px; font-weight: 700; margin: 0 0 20px; }
+    .prob-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    .prob-row:last-child { margin-bottom: 0; }
+    .prob-label { width: 90px; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+    .prob-track {
+        flex: 1;
+        height: 14px;
+        background: #F1F5F9;
+        border-radius: 7px;
+        overflow: hidden;
+    }
+    .prob-fill { height: 100%; border-radius: 7px; }
+    .prob-fill.Teknologi { background: var(--blue); }
+    .prob-fill.Medis { background: var(--green); }
+    .prob-fill.Edukasi { background: var(--orange); }
+    .prob-pct { width: 60px; text-align: right; font-size: 13px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; }
+
+    .content-card h2 { font-size: 16px; font-weight: 700; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+    .content-card .card-subtitle { font-size: 12px; color: var(--text-muted); margin: 0 0 16px; }
+    .content-card .body-text {
+        font-size: 14px;
+        color: #475569;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        margin: 0;
+    }
+    .truncated-note {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .delete-form { margin-top: 24px; }
+</style>
+
+<a href="{{ url_for('article_list') }}" class="back-link">&larr;  Kembali ke Daftar Artikel</a>
+
+<div class="detail-header">
+    <!-- ===== TAMPILAN NORMAL (JUDUL) ===== -->
+    <div id="titleView">
+        <h1>{{ article.title }}</h1>
+        <button type="button" class="edit-title-link" onclick="toggleEditTitle(true)">
+            &#9998; Edit Judul
+        </button>
+    </div>
+
+    <!-- ===== MODE EDIT JUDUL ===== -->
+    <form id="titleEditForm" method="POST" action="{{ url_for('article_edit_title', article_id=article.id) }}">
+        <label for="titleInput">Judul Artikel</label>
+        <input type="text" name="title" id="titleInput" value="{{ article.title }}" required>
+        <p class="edit-hint">Judul harus diisi untuk bisa disimpan.</p>
+        <div class="edit-actions">
+            <button type="submit" class="btn btn-accent">Simpan</button>
+            <button type="button" class="btn btn-cancel" onclick="toggleEditTitle(false)">Batal</button>
+        </div>
+    </form>
+
+    <div class="detail-meta-row">
+        <span class="badge {{ article.category }}">{{ article.category }}</span>
+        <span class="meta-text">
+            Confidence: {{ (article.confidence * 100) | round(2) }}% &middot;
+            {{ article.page_count }} halaman &middot;
+            Diupload: {{ article.uploaded_at.strftime('%Y-%m-%d %H:%M') }}
+        </span>
+    </div>
+    <a href="{{ url_for('article_pdf', article_id=article.id) }}" target="_blank" class="btn btn-navy">Lihat File PDF Asli</a>
+</div>
+
+<div style="height: 32px;"></div>
+
+<div class="card prob-card">
+    <h2>Probabilitas per Kategori</h2>
+    <div class="prob-row">
+        <span class="prob-label">Teknologi</span>
+        <div class="prob-track"><div class="prob-fill Teknologi" data-pct="{{ (article.prob_teknologi * 100) | round(1) }}"></div></div>
+        <span class="prob-pct">{{ (article.prob_teknologi * 100) | round(1) }}%</span>
+    </div>
+    <div class="prob-row">
+        <span class="prob-label">Medis</span>
+        <div class="prob-track"><div class="prob-fill Medis" data-pct="{{ (article.prob_medis * 100) | round(1) }}"></div></div>
+        <span class="prob-pct">{{ (article.prob_medis * 100) | round(1) }}%</span>
+    </div>
+    <div class="prob-row">
+        <span class="prob-label">Edukasi</span>
+        <div class="prob-track"><div class="prob-fill Edukasi" data-pct="{{ (article.prob_edukasi * 100) | round(1) }}"></div></div>
+        <span class="prob-pct">{{ (article.prob_edukasi * 100) | round(1) }}%</span>
+    </div>
+</div>
+
+<div class="card content-card">
+    <h2>Abstrak</h2>
+    <p class="card-subtitle">Hanya menampilkan bagian abstrak. Naskah lengkap tersedia di file PDF asli.</p>
+    <p class="body-text">{{ abstract_preview }}</p>
+    {% if is_truncated %}
+    <p class="truncated-note">
+        Teks dipotong otomatis. Untuk membaca artikel selengkapnya, klik
+        <a href="{{ url_for('article_pdf', article_id=article.id) }}" target="_blank" style="color: var(--accent); font-weight: 600;">Lihat File PDF Asli</a>.
+    </p>
+    {% endif %}
+</div>
+
+<form method="POST" action="{{ url_for('article_delete', article_id=article.id) }}" class="delete-form"
+      onsubmit="return confirm('Yakin ingin menghapus artikel ini? Tindakan ini tidak bisa dibatalkan.');">
+    <button type="submit" class="btn btn-danger-outline">Hapus Artikel</button>
+</form>
+
+<script>
+    function toggleEditTitle(showEdit) {
+        document.getElementById('titleView').style.display = showEdit ? 'none' : 'block';
+        document.getElementById('titleEditForm').style.display = showEdit ? 'block' : 'none';
+        if (showEdit) {
+            const input = document.getElementById('titleInput');
+            input.focus();
+            input.select();
+        }
+    }
+
+    // Isi width progress bar probabilitas dari data-pct (dipisah dari inline
+    // style Jinja supaya CSS linter di editor tidak salah membacanya sebagai CSS murni).
+    document.querySelectorAll('.prob-fill').forEach(function (el) {
+        el.style.width = el.dataset.pct + '%';
+    });
+</script>
+{% endblock %}
