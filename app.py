@@ -200,6 +200,40 @@ def extract_text_from_pdf(file_path: str) -> tuple[str, int]:
     return full_text, page_count
 
 
+# ----------------------------------------------------------------------
+# VALIDASI: PASTIKAN PDF ADALAH ARTIKEL JURNAL ILMIAH (BUKAN DOKUMEN RANDOM)
+# ----------------------------------------------------------------------
+# Latar belakang: model klasifikasi akan SELALU menghasilkan prediksi untuk
+# teks apapun yang dimasukkan (bahkan dokumen yang sama sekali bukan jurnal),
+# dan seringkali dengan confidence yang TINGGI meski salah (fenomena umum di
+# ML: model cenderung overconfident pada data di luar distribusi trainingnya).
+# Makanya perlu validasi TAMBAHAN di luar model itu sendiri.
+#
+# STRATEGI 2 LAPIS:
+# 1. Validasi struktural: jurnal akademik dari GARUDA hampir selalu punya
+#    bagian "Abstrak"/"Abstract" di awal dokumen. Dokumen lain (laporan
+#    magang, skripsi, makalah non-jurnal, dll) biasanya TIDAK punya ini
+#    (biasanya diawali "Kata Pengantar" dsb). Kalau tidak ketemu, PDF
+#    ditolak SEBELUM sempat diklasifikasi model.
+# 2. Validasi confidence: kalau probabilitas prediksi tertinggi model masih
+#    di bawah ambang batas, kemungkinan dokumen tidak cocok kategori manapun
+#    -> ditolak juga, meski sudah lolos validasi struktural.
+
+MIN_CONFIDENCE_THRESHOLD = 0.55  # kalau confidence di bawah ini, dianggap "tidak yakin"
+
+
+def has_abstract_section(text: str, window: int = 3000) -> bool:
+    """
+    Cek apakah teks mengandung kata 'abstrak' atau 'abstract' sebagai kata
+    utuh (pakai word boundary \\b, supaya tidak match substring di kata lain)
+    dalam beberapa ribu karakter pertama dokumen.
+    """
+    search_area = text[:window].lower()
+    return bool(
+        re.search(r"\babstrak\b", search_area) or re.search(r"\babstract\b", search_area)
+    )
+
+
 # Penanda umum yang biasanya muncul tepat SETELAH bagian abstrak pada jurnal
 # berbahasa Indonesia maupun Inggris. Dicari secara case-insensitive.
 ABSTRACT_END_MARKERS = [
@@ -338,12 +372,7 @@ def upload_submit():
         return redirect(url_for("upload_page"))
 
     if not allowed_file(uploaded_file.filename):
-        ext = uploaded_file.filename.rsplit(".", 1)[-1].lower() if "." in uploaded_file.filename else "tidak diketahui"
-        flash(
-            f"File \"{uploaded_file.filename}\" ditolak — formatnya .{ext}, bukan PDF. "
-            f"Sistem ini hanya menerima file dengan format .pdf.",
-            "error",
-        )
+        flash("Format file tidak didukung. Hanya file .pdf yang diterima.", "error")
         return redirect(url_for("upload_page"))
 
     original_filename = secure_filename(uploaded_file.filename)
@@ -361,6 +390,17 @@ def upload_submit():
         flash(str(e), "error")
         return redirect(url_for("upload_page"))
 
+    # ===== LAPIS VALIDASI 1: Cek struktur dokumen (harus ada bagian Abstrak) =====
+    if not has_abstract_section(extracted_text):
+        os.remove(stored_path)
+        flash(
+            f"'{original_filename}' ditolak — dokumen ini sepertinya BUKAN artikel jurnal "
+            f"ilmiah (tidak ditemukan bagian 'Abstrak' di awal dokumen). Sistem ini khusus "
+            f"untuk artikel/jurnal akademik, bukan laporan, skripsi, atau dokumen umum lainnya.",
+            "error",
+        )
+        return redirect(url_for("upload_page"))
+
     # Kalau judul kosong, ambil dari nama file (tanpa ekstensi .pdf).
     if not title:
         title = os.path.splitext(original_filename)[0]
@@ -371,6 +411,18 @@ def upload_submit():
     except ValueError as e:
         os.remove(stored_path)
         flash(str(e), "error")
+        return redirect(url_for("upload_page"))
+
+    # ===== LAPIS VALIDASI 2: Cek confidence hasil klasifikasi =====
+    if result["confidence"] < MIN_CONFIDENCE_THRESHOLD:
+        os.remove(stored_path)
+        flash(
+            f"'{original_filename}' ditolak — model tidak cukup yakin dokumen ini termasuk "
+            f"kategori Teknologi, Medis, atau Edukasi (confidence tertinggi hanya "
+            f"{result['confidence']*100:.1f}%). Kemungkinan dokumen ini bukan jurnal yang "
+            f"didukung sistem, atau ekstraksi teksnya kurang bersih.",
+            "error",
+        )
         return redirect(url_for("upload_page"))
 
     article = Article(
