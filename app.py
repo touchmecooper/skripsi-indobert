@@ -221,6 +221,14 @@ def extract_text_from_pdf(file_path: str) -> tuple[str, int]:
 
 MIN_CONFIDENCE_THRESHOLD = 0.55  # kalau confidence di bawah ini, dianggap "tidak yakin"
 
+# Kata kunci yang menandakan dokumen adalah PEDOMAN/PANDUAN (mengajarkan cara
+# menulis skripsi/jurnal), BUKAN artikel jurnal itu sendiri. Dokumen semacam ini
+# sering menyebut kata "Abstrak" berkali-kali (sebagai contoh/instruksi), jadi
+# perlu dicek terpisah dari sekadar keberadaan kata "abstrak".
+GUIDELINE_DOCUMENT_KEYWORDS = [
+    "buku pedoman", "pedoman penulisan", "panduan penulisan", "ketentuan penulisan",
+]
+
 
 def has_abstract_section(text: str, window: int = 3000) -> bool:
     """
@@ -232,6 +240,42 @@ def has_abstract_section(text: str, window: int = 3000) -> bool:
     return bool(
         re.search(r"\babstrak\b", search_area) or re.search(r"\babstract\b", search_area)
     )
+
+
+def has_toc_dot_leaders(text: str, window: int = 3000, min_occurrences: int = 3) -> bool:
+    """
+    Deteksi pola khas DAFTAR ISI: titik berderet (4+) diikuti nomor halaman,
+    misal "3.1.4 Abstrak ................................ 13". Pola ini SANGAT
+    umum di buku pedoman/laporan formal, tapi HAMPIR TIDAK PERNAH muncul di
+    artikel jurnal (jurnal biasanya tidak punya daftar isi bergaya ini).
+    """
+    search_area = text[:window]
+    matches = re.findall(r"\.{4,}\s*[ivxlc\d]+\b", search_area, re.IGNORECASE)
+    return len(matches) >= min_occurrences
+
+
+def has_guideline_keywords(text: str, window: int = 2000) -> bool:
+    """Deteksi kata kunci yang menandakan dokumen pedoman/panduan penulisan."""
+    search_area = text[:window].lower()
+    return any(keyword in search_area for keyword in GUIDELINE_DOCUMENT_KEYWORDS)
+
+
+def is_valid_journal_article(text: str) -> tuple[bool, str]:
+    """
+    Validasi struktural gabungan untuk memastikan dokumen benar-benar artikel
+    jurnal, bukan buku pedoman/panduan, laporan magang, atau dokumen umum
+    lainnya. Return tuple (is_valid, alasan_kalau_gagal).
+    """
+    if not has_abstract_section(text):
+        return False, "tidak ditemukan bagian 'Abstrak' di awal dokumen"
+
+    if has_guideline_keywords(text):
+        return False, "dokumen ini terdeteksi sebagai buku pedoman/panduan penulisan, bukan artikel jurnal itu sendiri"
+
+    if has_toc_dot_leaders(text):
+        return False, "terdeteksi pola daftar isi (halaman formal/laporan), bukan format artikel jurnal"
+
+    return True, ""
 
 
 # Penanda umum yang biasanya muncul tepat SETELAH bagian abstrak pada jurnal
@@ -390,13 +434,14 @@ def upload_submit():
         flash(str(e), "error")
         return redirect(url_for("upload_page"))
 
-    # ===== LAPIS VALIDASI 1: Cek struktur dokumen (harus ada bagian Abstrak) =====
-    if not has_abstract_section(extracted_text):
+    # ===== LAPIS VALIDASI 1: Cek struktur dokumen (harus artikel jurnal asli) =====
+    is_valid, reason = is_valid_journal_article(extracted_text)
+    if not is_valid:
         os.remove(stored_path)
         flash(
-            f"'{original_filename}' ditolak — dokumen ini sepertinya BUKAN artikel jurnal "
-            f"ilmiah (tidak ditemukan bagian 'Abstrak' di awal dokumen). Sistem ini khusus "
-            f"untuk artikel/jurnal akademik, bukan laporan, skripsi, atau dokumen umum lainnya.",
+            f"'{original_filename}' ditolak — {reason}. Sistem ini khusus "
+            f"untuk artikel/jurnal akademik, bukan buku pedoman, laporan, "
+            f"skripsi, atau dokumen umum lainnya.",
             "error",
         )
         return redirect(url_for("upload_page"))
