@@ -200,31 +200,8 @@ def extract_text_from_pdf(file_path: str) -> tuple[str, int]:
     return full_text, page_count
 
 
-# ----------------------------------------------------------------------
-# VALIDASI: PASTIKAN PDF ADALAH ARTIKEL JURNAL ILMIAH (BUKAN DOKUMEN RANDOM)
-# ----------------------------------------------------------------------
-# Latar belakang: model klasifikasi akan SELALU menghasilkan prediksi untuk
-# teks apapun yang dimasukkan (bahkan dokumen yang sama sekali bukan jurnal),
-# dan seringkali dengan confidence yang TINGGI meski salah (fenomena umum di
-# ML: model cenderung overconfident pada data di luar distribusi trainingnya).
-# Makanya perlu validasi TAMBAHAN di luar model itu sendiri.
-#
-# STRATEGI 2 LAPIS:
-# 1. Validasi struktural: jurnal akademik dari GARUDA hampir selalu punya
-#    bagian "Abstrak"/"Abstract" di awal dokumen. Dokumen lain (laporan
-#    magang, skripsi, makalah non-jurnal, dll) biasanya TIDAK punya ini
-#    (biasanya diawali "Kata Pengantar" dsb). Kalau tidak ketemu, PDF
-#    ditolak SEBELUM sempat diklasifikasi model.
-# 2. Validasi confidence: kalau probabilitas prediksi tertinggi model masih
-#    di bawah ambang batas, kemungkinan dokumen tidak cocok kategori manapun
-#    -> ditolak juga, meski sudah lolos validasi struktural.
+MIN_CONFIDENCE_THRESHOLD = 0.55  
 
-MIN_CONFIDENCE_THRESHOLD = 0.55  # kalau confidence di bawah ini, dianggap "tidak yakin"
-
-# Kata kunci yang menandakan dokumen adalah PEDOMAN/PANDUAN (mengajarkan cara
-# menulis skripsi/jurnal), BUKAN artikel jurnal itu sendiri. Dokumen semacam ini
-# sering menyebut kata "Abstrak" berkali-kali (sebagai contoh/instruksi), jadi
-# perlu dicek terpisah dari sekadar keberadaan kata "abstrak".
 GUIDELINE_DOCUMENT_KEYWORDS = [
     "buku pedoman", "pedoman penulisan", "panduan penulisan", "ketentuan penulisan",
 ]
@@ -232,7 +209,7 @@ GUIDELINE_DOCUMENT_KEYWORDS = [
 
 def has_abstract_section(text: str, window: int = 3000) -> bool:
     """
-    Cek apakah teks mengandung kata 'abstrak' atau 'abstract' sebagai kata
+    Cek teks mengandung kata 'abstrak' atau 'abstract' sebagai kata
     utuh (pakai word boundary \\b, supaya tidak match substring di kata lain)
     dalam beberapa ribu karakter pertama dokumen.
     """
@@ -244,10 +221,7 @@ def has_abstract_section(text: str, window: int = 3000) -> bool:
 
 def has_toc_dot_leaders(text: str, window: int = 3000, min_occurrences: int = 3) -> bool:
     """
-    Deteksi pola khas DAFTAR ISI: titik berderet (4+) diikuti nomor halaman,
-    misal "3.1.4 Abstrak ................................ 13". Pola ini SANGAT
-    umum di buku pedoman/laporan formal, tapi HAMPIR TIDAK PERNAH muncul di
-    artikel jurnal (jurnal biasanya tidak punya daftar isi bergaya ini).
+    Deteksi pola khas DAFTAR ISI
     """
     search_area = text[:window]
     matches = re.findall(r"\.{4,}\s*[ivxlc\d]+\b", search_area, re.IGNORECASE)
@@ -263,8 +237,7 @@ def has_guideline_keywords(text: str, window: int = 2000) -> bool:
 def is_valid_journal_article(text: str) -> tuple[bool, str]:
     """
     Validasi struktural gabungan untuk memastikan dokumen benar-benar artikel
-    jurnal, bukan buku pedoman/panduan, laporan magang, atau dokumen umum
-    lainnya. Return tuple (is_valid, alasan_kalau_gagal).
+    jurnal
     """
     if not has_abstract_section(text):
         return False, "tidak ditemukan bagian 'Abstrak' di awal dokumen"
@@ -286,23 +259,20 @@ ABSTRACT_END_MARKERS = [
     "introduction", "i. introduction", "1. introduction",
 ]
 
-ABSTRACT_HARD_CHAR_LIMIT = 1500       # batas aman kalau penanda tidak ketemu
-ABSTRACT_MARKER_SEARCH_WINDOW = 4000  # hanya cari penanda dalam N karakter pertama
+ABSTRACT_HARD_CHAR_LIMIT = 1500       
+ABSTRACT_MARKER_SEARCH_WINDOW = 4000  
 
 
 def extract_abstract_preview(full_text: str) -> tuple[str, bool]:
     """
     Mengambil bagian abstrak saja dari teks hasil ekstraksi PDF, dengan
-    pendekatan heuristik (bukan ekstraksi struktural yang sempurna):
+    pendekatan heuristik
 
     1. Cari penanda akhir abstrak (mis. "Kata Kunci", "Pendahuluan") di
        dalam beberapa ribu karakter pertama teks.
     2. Kalau ketemu, potong teks tepat sebelum penanda tersebut.
     3. Kalau tidak ketemu, fallback ke batas jumlah karakter tetap
        (dipotong di spasi terakhir supaya tidak memotong kata).
-
-    Return tuple (teks_preview, is_truncated) — is_truncated menandakan
-    apakah teks aslinya lebih panjang dari preview yang ditampilkan.
     """
     search_area = full_text[:ABSTRACT_MARKER_SEARCH_WINDOW]
     lower_area = search_area.lower()
@@ -390,24 +360,13 @@ def api_predict():
 
 @app.route("/", methods=["GET"])
 def upload_page():
-    """
-    Halaman utama aplikasi: form untuk upload jurnal/artikel baru dalam format PDF.
-    (Halaman 'Test Model' lama sudah dihapus; '/' sekarang langsung menuju upload.)
-    """
+
     return render_template("upload.html")
 
 
 @app.route("/", methods=["POST"])
 def upload_submit():
-    """
-    Menangani submit file PDF baru:
-    1. Validasi file (harus ada, harus .pdf).
-    2. Simpan file PDF ke folder lokal `uploaded_pdfs/` dengan nama unik
-       (supaya tidak bentrok kalau ada file dengan nama sama).
-    3. Ekstrak teks dari PDF.
-    4. Klasifikasikan teks hasil ekstraksi menggunakan model IndoBERT.
-    5. Simpan record ke database (judul, path file, teks, hasil klasifikasi).
-    """
+
     uploaded_file = request.files.get("file")
     title = request.form.get("title", "").strip()
 
@@ -421,7 +380,7 @@ def upload_submit():
 
     original_filename = secure_filename(uploaded_file.filename)
 
-    # Nama file unik di disk supaya tidak menimpa file lain dengan nama sama.
+    # Nama file unik di disk agar tidak menimpa file lain dengan nama sama.
     stored_filename = f"{uuid.uuid4().hex}_{original_filename}"
     stored_path = os.path.join(UPLOAD_FOLDER, stored_filename)
     uploaded_file.save(stored_path)
@@ -446,7 +405,7 @@ def upload_submit():
         )
         return redirect(url_for("upload_page"))
 
-    # Kalau judul kosong, ambil dari nama file (tanpa ekstensi .pdf).
+    # Kalau judul kosong, ambil dari nama file.
     if not title:
         title = os.path.splitext(original_filename)[0]
 
@@ -458,7 +417,7 @@ def upload_submit():
         flash(str(e), "error")
         return redirect(url_for("upload_page"))
 
-    # ===== LAPIS VALIDASI 2: Cek confidence hasil klasifikasi =====
+    #LAPIS VALIDASI 2: Cek confidence hasil klasifikasi
     if result["confidence"] < MIN_CONFIDENCE_THRESHOLD:
         os.remove(stored_path)
         flash(
@@ -495,11 +454,7 @@ def upload_submit():
 
 @app.route("/articles", methods=["GET"])
 def article_list():
-    """
-    Menampilkan daftar artikel tersimpan.
-    Mendukung filter kategori via query param ?category=Teknologi
-    dan pencarian judul/isi via ?q=kata_kunci
-    """
+
     category_filter = request.args.get("category", "").strip()
     search_query = request.args.get("q", "").strip()
 
@@ -537,11 +492,7 @@ def article_list():
 
 @app.route("/articles/<int:article_id>", methods=["GET"])
 def article_detail(article_id):
-    """
-    Menampilkan detail satu artikel: judul (bisa diedit), kategori,
-    confidence, dan ABSTRAK saja (bukan isi PDF lengkap) di bagian
-    "Isi Artikel". Naskah lengkap tetap bisa dibuka lewat file PDF asli.
-    """
+
     article = Article.query.get_or_404(article_id)
     abstract_preview, is_truncated = extract_abstract_preview(article.content)
     return render_template(
@@ -554,7 +505,7 @@ def article_detail(article_id):
 
 @app.route("/articles/<int:article_id>/edit-title", methods=["POST"])
 def article_edit_title(article_id):
-    """Mengubah judul artikel yang sudah tersimpan."""
+
     article = Article.query.get_or_404(article_id)
     new_title = request.form.get("title", "").strip()
 
@@ -570,7 +521,7 @@ def article_edit_title(article_id):
 
 @app.route("/articles/<int:article_id>/pdf", methods=["GET"])
 def article_pdf(article_id):
-    """Menyajikan file PDF asli untuk dilihat/didownload di browser."""
+
     article = Article.query.get_or_404(article_id)
     return send_from_directory(
         UPLOAD_FOLDER,
@@ -582,7 +533,7 @@ def article_pdf(article_id):
 
 @app.route("/articles/<int:article_id>/delete", methods=["POST"])
 def article_delete(article_id):
-    """Menghapus artikel dari database beserta file PDF fisiknya di disk."""
+
     article = Article.query.get_or_404(article_id)
 
     pdf_path = os.path.join(UPLOAD_FOLDER, article.stored_filename)
@@ -596,6 +547,6 @@ def article_delete(article_id):
 
 
 if __name__ == "__main__":
-    # debug=True hanya untuk keperluan development/testing skripsi,
+    # debug=True hanya untuk keperluan development/testing,
     # matikan saat deploy.
     app.run(debug=True, host="127.0.0.1", port=5000)
